@@ -68,7 +68,7 @@ def log_to_sheet(sheet, title, link):
 def send_telegram_news(title, link):
     message = f"""🔥 <b>디마니코 뉴스</b> 🔥
 
-[속보] {title}
+{title}
 {link}
 """
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
