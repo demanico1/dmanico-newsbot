@@ -10,14 +10,12 @@ import os
 from flask import Flask
 import pandas as pd
 
-# ──────────────────────────────
 # 🔐 디마니코 정보
 BOT_TOKEN = '텔레그램봇토큰'
 CHAT_ID = '채팅ID'
 SHEET_NAME = '디마니코 뉴스 트래커'
 
-# ──────────────────────────────
-# ✅ Flask (Render 용 백그라운드 keep alive)
+# ✅ Flask 백그라운드 서버 유지 (Render용)
 app = Flask(__name__)
 @app.route('/')
 def home():
@@ -26,18 +24,16 @@ def run_flask():
     app.run(host='0.0.0.0', port=10000)
 threading.Thread(target=run_flask).start()
 
-# ──────────────────────────────
-# ✅ 종목 리스트 불러오기 (cp949 인코딩 수정!)
+# ✅ 종목 리스트 (cp949 인코딩)
 def get_krx_stock_list():
     url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download"
-    df = pd.read_html(url, encoding='cp949')[0]  # ← 핵심 수정!
+    df = pd.read_html(url, encoding='cp949')[0]
     df['종목코드'] = df['종목코드'].apply(lambda x: f"{x:06d}")
     return dict(zip(df['회사명'], df['종목코드']))
 
 stock_dict = get_krx_stock_list()
 
-# ──────────────────────────────
-# ✅ 종목명 추출 (본문 포함)
+# ✅ 종목명 추출
 def extract_stock_from_article(title, url, stock_dict):
     text = title
     try:
@@ -53,8 +49,7 @@ def extract_stock_from_article(title, url, stock_dict):
             return name, stock_dict[name]
     return None, None
 
-# ──────────────────────────────
-# ✅ 뉴스 수집 함수들 (필터 없이 전부 수집)
+# ✅ 뉴스 수집 (필터 없이 전부)
 def get_naver_stock(news_list):
     url = "https://finance.naver.com/news/news_list.naver?mode=LSS2&section_id=101&section_id2=258"
     res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -96,7 +91,6 @@ def get_all_news():
     unique = list({link: title for title, link in collected_news}.items())
     return unique
 
-# ──────────────────────────────
 # ✅ 구글시트 연결
 def connect_sheet():
     key_json = os.environ.get('GOOGLE_KEY_JSON')
@@ -113,7 +107,6 @@ def connect_sheet():
 
 sheet = connect_sheet()
 
-# ──────────────────────────────
 # ✅ 시트 기록
 def log_to_sheet(sheet, title, link):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -137,10 +130,10 @@ def send_telegram_news(title, link):
     response = requests.post(url, data=data)
     print(f"[텔레그램 응답] {response.text}")
 
-# ──────────────────────────────
 # ✅ 실행 루프
 old_links = []
 while True:
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 루프 돌고 있음...")  # ⏱️ 루프 확인
     news = get_all_news()
     for link, title in news:
         if link not in old_links:
