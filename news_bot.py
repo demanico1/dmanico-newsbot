@@ -21,6 +21,7 @@ app = Flask(__name__)
 @app.route('/')
 def home():
     return "디마니코 뉴스봇 작동 중!"
+
 def run_flask():
     app.run(host='0.0.0.0', port=10000)
 threading.Thread(target=run_flask).start()
@@ -131,20 +132,25 @@ def send_telegram_news(title, link):
     response = requests.post(url, data=data)
     print(f"[텔레그램 응답] {response.text}")
 
-# ✅ 실행 루프
-old_links = []
-while True:
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 루프 돌고 있음...")  # ⏱️ 루프 체크
-    news = get_all_news()
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 수집된 뉴스 개수: {len(news)}")  # 🔍 수집 수량 확인
-    for link, title in news:
-        if link not in old_links:
-            stock_name, stock_code = extract_stock_from_article(title, link, stock_dict)
-            if stock_name:
-                title = f"[{stock_name}] {title}"
-            send_telegram_news(title, link)
-            log_to_sheet(sheet, title, link)
-            old_links.append(link)
-            if len(old_links) > 30:
-                old_links.pop(0)
-    time.sleep(60)
+# ✅ 뉴스 수집 루프
+
+def start_news_loop():
+    old_links = []
+    while True:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 루프 돌고 있음...")
+        news = get_all_news()
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] 수집된 뉴스 개수: {len(news)}")
+        for link, title in news:
+            if link not in old_links:
+                stock_name, stock_code = extract_stock_from_article(title, link, stock_dict)
+                if stock_name:
+                    title = f"[{stock_name}] {title}"
+                send_telegram_news(title, link)
+                log_to_sheet(sheet, title, link)
+                old_links.append(link)
+                if len(old_links) > 30:
+                    old_links.pop(0)
+        time.sleep(60)
+
+threading.Thread(target=start_news_loop).start()
+
