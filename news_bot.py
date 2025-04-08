@@ -17,29 +17,27 @@ CHAT_ID = '채팅ID'
 SHEET_NAME = '디마니코 뉴스 트래커'
 
 # ──────────────────────────────
-# ✅ Flask 서버 (Render 대응용)
+# ✅ Flask (Render 용 백그라운드 keep alive)
 app = Flask(__name__)
 @app.route('/')
 def home():
     return "디마니코 뉴스봇 작동 중!"
-
 def run_flask():
     app.run(host='0.0.0.0', port=10000)
-
 threading.Thread(target=run_flask).start()
 
 # ──────────────────────────────
-# ✅ 종목 리스트 (KRX 실시간 불러오기)
+# ✅ 종목 리스트 불러오기 (cp949 인코딩 수정!)
 def get_krx_stock_list():
     url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download"
-    df = pd.read_html(url, encoding='utf-8')[0]
+    df = pd.read_html(url, encoding='cp949')[0]  # ← 핵심 수정!
     df['종목코드'] = df['종목코드'].apply(lambda x: f"{x:06d}")
     return dict(zip(df['회사명'], df['종목코드']))
 
 stock_dict = get_krx_stock_list()
 
 # ──────────────────────────────
-# ✅ 뉴스 본문에서 종목명 감지
+# ✅ 종목명 추출 (본문 포함)
 def extract_stock_from_article(title, url, stock_dict):
     text = title
     try:
