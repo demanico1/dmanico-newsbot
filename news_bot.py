@@ -7,15 +7,29 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
+from flask import Flask
+import threading
 
 # 🔐 디마니코 정보
 BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
 CHAT_ID = '2037756724'
 SHEET_NAME = '디마니코 뉴스 트래커'
 
-# ✅ Render 환경변수에서 JSON 키 로드
+# ✅ Flask 웹 서버 실행 (Render용)
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "디마니코 뉴스봇 작동 중입니다!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+
+threading.Thread(target=run_flask).start()
+
+# ✅ 구글시트 연결
 def connect_sheet():
-    key_json = os.environ.get('GOOGLE_KEY_JSON')  # Render에서 입력한 환경변수
+    key_json = os.environ.get('GOOGLE_KEY_JSON')
     if not key_json:
         print("❌ GOOGLE_KEY_JSON 환경변수 없음!")
         exit()
@@ -82,7 +96,7 @@ def send_telegram_news(title, link):
     response = requests.post(url, data=data)
     print(f"[텔레그램 응답] {response.text}")
 
-# ✅ 실행 루프
+# ✅ 뉴스 감지 루프
 old_links = []
 while True:
     news = get_news()
