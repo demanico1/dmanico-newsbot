@@ -5,3 +5,4 @@ oauth2client
 flask
 pandas
 lxml
+html5lib
