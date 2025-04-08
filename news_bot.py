@@ -1,32 +1,104 @@
+import threading
 import requests
 from bs4 import BeautifulSoup
 import time
 from datetime import datetime
-import re
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
 from flask import Flask
-import threading
+import pandas as pd
 
+# ──────────────────────────────
 # 🔐 디마니코 정보
-BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
-CHAT_ID = '2037756724'
+BOT_TOKEN = '텔레그램봇토큰'
+CHAT_ID = '채팅ID'
 SHEET_NAME = '디마니코 뉴스 트래커'
 
-# ✅ Flask 웹 서버 실행 (Render용)
+# ──────────────────────────────
+# ✅ Flask 서버 (Render 대응용)
 app = Flask(__name__)
-
 @app.route('/')
 def home():
-    return "디마니코 뉴스봇 작동 중입니다!"
+    return "디마니코 뉴스봇 작동 중!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=10000)
 
 threading.Thread(target=run_flask).start()
 
+# ──────────────────────────────
+# ✅ 종목 리스트 (KRX 실시간 불러오기)
+def get_krx_stock_list():
+    url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download"
+    df = pd.read_html(url, encoding='utf-8')[0]
+    df['종목코드'] = df['종목코드'].apply(lambda x: f"{x:06d}")
+    return dict(zip(df['회사명'], df['종목코드']))
+
+stock_dict = get_krx_stock_list()
+
+# ──────────────────────────────
+# ✅ 뉴스 본문에서 종목명 감지
+def extract_stock_from_article(title, url, stock_dict):
+    text = title
+    try:
+        res = requests.get(url, timeout=3)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        body = soup.get_text()
+        text += body
+    except:
+        pass
+
+    for name in stock_dict.keys():
+        if name in text:
+            return name, stock_dict[name]
+    return None, None
+
+# ──────────────────────────────
+# ✅ 뉴스 수집 함수들 (필터 없이 전부 수집)
+def get_naver_stock(news_list):
+    url = "https://finance.naver.com/news/news_list.naver?mode=LSS2&section_id=101&section_id2=258"
+    res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+    soup = BeautifulSoup(res.text, "html.parser")
+    for a in soup.select("dd.articleSubject a"):
+        title = a.get_text(strip=True)
+        link = "https://finance.naver.com" + a['href']
+        news_list.append((title, link))
+
+def get_daum_economy(news_list):
+    url = "https://news.daum.net/breakingnews/economic"
+    res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+    soup = BeautifulSoup(res.text, "html.parser")
+    for a in soup.select("ul.list_news2 a.link_txt"):
+        title = a.get_text(strip=True)
+        link = a['href']
+        news_list.append((title, link))
+
+def get_yna_stock(news_list):
+    url = "https://www.yna.co.kr/theme-stock"
+    res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+    soup = BeautifulSoup(res.text, "html.parser")
+    for a in soup.select("div.list-type038 a.tit-wrap"):
+        title = a.get_text(strip=True)
+        link = "https:" + a['href']
+        news_list.append((title, link))
+
+def get_all_news():
+    collected_news = []
+    threads = [
+        threading.Thread(target=get_naver_stock, args=(collected_news,)),
+        threading.Thread(target=get_daum_economy, args=(collected_news,)),
+        threading.Thread(target=get_yna_stock, args=(collected_news,))
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    unique = list({link: title for title, link in collected_news}.items())
+    return unique
+
+# ──────────────────────────────
 # ✅ 구글시트 연결
 def connect_sheet():
     key_json = os.environ.get('GOOGLE_KEY_JSON')
@@ -43,35 +115,7 @@ def connect_sheet():
 
 sheet = connect_sheet()
 
-# ✅ 뉴스 크롤링
-def get_news():
-    url = 'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001'
-    res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    soup = BeautifulSoup(res.text, 'html.parser')
-
-    news_list = []
-    for li in soup.select('.type06_headline li'):
-        a_tag = li.select_one('a')
-        if a_tag:
-            link = a_tag['href']
-
-            img_tag = li.select_one('img')
-            strong_tag = li.select_one('strong')
-
-            if img_tag and img_tag.has_attr('alt'):
-                title = img_tag['alt']
-            elif strong_tag:
-                title = strong_tag.get_text(strip=True)
-            else:
-                title = a_tag.get_text(strip=True)
-
-            if not title or len(title) < 5 or not re.search(r'[가-힣]', title):
-                continue
-
-            news_list.append((title, link))
-
-    return news_list
-
+# ──────────────────────────────
 # ✅ 시트 기록
 def log_to_sheet(sheet, title, link):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -92,17 +136,19 @@ def send_telegram_news(title, link):
         'parse_mode': 'HTML',
         'disable_web_page_preview': False
     }
-
     response = requests.post(url, data=data)
     print(f"[텔레그램 응답] {response.text}")
 
-# ✅ 뉴스 감지 루프
+# ──────────────────────────────
+# ✅ 실행 루프
 old_links = []
 while True:
-    news = get_news()
-    for title, link in news:
+    news = get_all_news()
+    for link, title in news:
         if link not in old_links:
-            print(f"[뉴스 감지] {title}")
+            stock_name, stock_code = extract_stock_from_article(title, link, stock_dict)
+            if stock_name:
+                title = f"[{stock_name}] {title}"
             send_telegram_news(title, link)
             log_to_sheet(sheet, title, link)
             old_links.append(link)
