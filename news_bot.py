@@ -5,24 +5,31 @@ from datetime import datetime
 import re
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import json
+import os
 
 # 🔐 디마니코 정보
 BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
 CHAT_ID = '2037756724'
 SHEET_NAME = '디마니코 뉴스 트래커'
-KEY_FILE = 'dmanico-news-key.json'
 
-# ✅ 구글시트 연결
+# ✅ Render 환경변수에서 JSON 키 로드
 def connect_sheet():
+    key_json = os.environ.get('GOOGLE_KEY_JSON')  # Render에서 입력한 환경변수
+    if not key_json:
+        print("❌ GOOGLE_KEY_JSON 환경변수 없음!")
+        exit()
+
+    key_dict = json.loads(key_json)
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name(KEY_FILE, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME).sheet1
     return sheet
 
 sheet = connect_sheet()
 
-# ✅ 뉴스 크롤링 (한글 + 실제 제목 추출)
+# ✅ 뉴스 크롤링
 def get_news():
     url = 'https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001'
     res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -34,7 +41,6 @@ def get_news():
         if a_tag:
             link = a_tag['href']
 
-            # 실제 제목 찾기 우선순위: img alt > strong > a text
             img_tag = li.select_one('img')
             strong_tag = li.select_one('strong')
 
@@ -45,7 +51,6 @@ def get_news():
             else:
                 title = a_tag.get_text(strip=True)
 
-            # 필터링: 제목 없거나 짧거나 한글 없으면 건너뛰기
             if not title or len(title) < 5 or not re.search(r'[가-힣]', title):
                 continue
 
@@ -77,7 +82,7 @@ def send_telegram_news(title, link):
     response = requests.post(url, data=data)
     print(f"[텔레그램 응답] {response.text}")
 
-# ✅ 루프: 1분마다 감지
+# ✅ 실행 루프
 old_links = []
 while True:
     news = get_news()
