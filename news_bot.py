@@ -3,9 +3,8 @@ import time
 import json
 import threading
 import requests
-import re
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -23,11 +22,15 @@ SHEET_NAME = '디마니코 뉴스 트래커'
 MAX_SEND_PER_LOOP = 3
 LINK_CACHE_FILE = 'old_links.json'
 
+# KST 시간 함수
+def now_kst():
+    return datetime.utcnow() + timedelta(hours=9)
+
 # Flask 서버
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "🟢 디마니코 뉴스봇 (요약X, 감성X, 언론사O)"
+    return "🟢 디마니코 뉴스봇 (KST 적용 + 필터링 제거)"
 
 # 구글 시트 연결
 def connect_google_sheet(sheet_name):
@@ -44,7 +47,7 @@ def connect_google_sheet(sheet_name):
 sheet = connect_google_sheet(SHEET_NAME)
 
 def get_daily_worksheet(sheet):
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = now_kst().strftime('%Y-%m-%d')
     try:
         worksheet = sheet.worksheet(today)
     except gspread.exceptions.WorksheetNotFound:
@@ -54,7 +57,7 @@ def get_daily_worksheet(sheet):
 
 def log_to_sheet(sheet, title, link, press):
     worksheet = get_daily_worksheet(sheet)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = now_kst().strftime("%Y-%m-%d %H:%M:%S")
     try:
         worksheet.append_row([now, title, link, press])
         print(f"[시트 기록됨] {title}")
@@ -74,7 +77,7 @@ def save_old_links(links):
         json.dump(links[-100:], f)
 
 def get_live_news():
-    url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001"
+    url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001"  # 속보
     res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
     soup = BeautifulSoup(res.text, 'html.parser')
 
@@ -88,22 +91,6 @@ def get_live_news():
             press_name = press.get_text(strip=True)
             news_list.append((title, link, press_name))
     return news_list
-
-def fetch_article_content(url):
-    try:
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        soup = BeautifulSoup(res.text, 'html.parser')
-        paragraphs = soup.select("#dic_area p")
-        content = "\n".join([p.get_text(strip=True) for p in paragraphs])
-        print(f"📄 본문 길이: {len(content)}")
-        return content[:1000]
-    except Exception as e:
-        print(f"❌ 본문 추출 실패:")
-        traceback.print_exc()
-        return ""
-
-def contains_korean(text):
-    return bool(re.search(r'[가-힣]', text))
 
 def send_telegram(title, link, press):
     message = f"""📰 <b>{title}</b>\n<b>언론사:</b> {press}\n\n{link}"""
@@ -121,19 +108,16 @@ def send_telegram(title, link, press):
         print(f"❌ 텔레그램 전송 실패:")
         traceback.print_exc()
 
+# 뉴스 루프
 def news_loop():
     old_links = load_old_links()
     while True:
-        now = datetime.now().strftime('%H:%M:%S')
+        now = now_kst().strftime('%H:%M:%S')
         print(f"\n🔁 [{now}] 뉴스 루프 시작")
         news_items = get_live_news()
         count = 0
         for title, link, press in news_items:
-            if link not in old_links and contains_korean(title):
-                content = fetch_article_content(link)
-                if not contains_korean(content):
-                    print(f"⛔ 본문에 한글 없음 → 제외: {title}")
-                    continue
+            if link not in old_links:
                 send_telegram(title, link, press)
                 log_to_sheet(sheet, title, link, press)
                 old_links.append(link)
