@@ -10,19 +10,19 @@ import openai
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# 🔧 설정
+# 🧠 설정
 BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
 CHAT_ID = '2037756724'
 SHEET_NAME = '디마니코 뉴스 트래커'
-MAX_SEND_PER_LOOP = 5
+MAX_SEND_PER_LOOP = 3  # 테스트라서 작게
 LINK_CACHE_FILE = 'old_links.json'
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-# ✅ Flask 웹 서버 (Render Web Service 용)
+# ✅ Flask 서버
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "🟢 디마니코 실시간 뉴스봇 작동 중입니다!"
+    return "🟢 디마니코 뉴스봇 테스트 작동 중!"
 
 # ✅ 구글 시트 연결
 def connect_google_sheet(sheet_name):
@@ -68,7 +68,7 @@ def save_old_links(links):
         json.dump(links[-100:], f)
 
 def get_live_news():
-    url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=100"  # 정치 최신 뉴스
+    url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001"  # 속보 섹션
     res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
     soup = BeautifulSoup(res.text, 'html.parser')
 
@@ -104,7 +104,7 @@ def summarize_news(title, content):
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"❌ 요약 실패: {e}")
-        return ""
+        return "요약 실패"
 
 def analyze_sentiment(title, content):
     try:
@@ -116,11 +116,7 @@ def analyze_sentiment(title, content):
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"❌ 감성 분석 실패: {e}")
-        return ""
-
-def is_preview_supported(url):
-    preview_domains = ['etoday.co.kr', 'biz.chosun.com', 'hankyung.com', 'mk.co.kr', 'news.naver.com']
-    return any(domain in url for domain in preview_domains)
+        return "분석 실패"
 
 def send_telegram(title, summary, sentiment, link, press):
     message = f"""📰 <b>{title}</b>\n\n<b>요약:</b> {summary}\n<b>감성:</b> {sentiment}\n<b>언론사:</b> {press}\n\n{link}"""
@@ -137,38 +133,32 @@ def send_telegram(title, summary, sentiment, link, press):
     except Exception as e:
         print(f"❌ 텔레그램 전송 실패: {e}")
 
+# ✅ 테스트용 뉴스 루프
 def news_loop():
     old_links = load_old_links()
-    first_run = True
     while True:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] 실시간 뉴스 수집 중...")
         news_items = get_live_news()
         count = 0
         for title, link, press in news_items:
-            if link not in old_links and is_preview_supported(link):
+            if link not in old_links:
                 content = fetch_article_content(link)
-                if not content:
-                    continue
                 summary = summarize_news(title, content)
                 sentiment = analyze_sentiment(title, content)
-                if not first_run:
-                    send_telegram(title, summary, sentiment, link, press)
-                    log_to_sheet(sheet, title, summary, sentiment, link, press)
-                    count += 1
-                    time.sleep(1)
+                send_telegram(title, summary, sentiment, link, press)
+                log_to_sheet(sheet, title, summary, sentiment, link, press)
+
                 old_links.append(link)
+                count += 1
+                time.sleep(1)
                 if count >= MAX_SEND_PER_LOOP:
                     break
-        if first_run:
-            print("🔕 첫 루프 전송 생략")
-            first_run = False
         save_old_links(old_links)
         time.sleep(60)
 
-# ✅ 백그라운드에서 루프 실행
+# ✅ 실행
 threading.Thread(target=news_loop, daemon=True).start()
 
-# ✅ Flask 서버 실행
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
