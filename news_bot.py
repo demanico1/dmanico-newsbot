@@ -93,14 +93,10 @@ def get_live_news():
     return news_list
 
 def send_telegram(title, link, press):
-    message = f"""🔥 <b>뉴스</b> 🔥
+    message = f"""📰 <b>[{press}]</b> {title}
 
-📰 <b>{title}</b>
-<b>매체:</b> {press}
-
-🔗 <a href="{link}">{link}</a>
+{link}
 """
-
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         'chat_id': CHAT_ID,
@@ -108,7 +104,6 @@ def send_telegram(title, link, press):
         'parse_mode': 'HTML',
         'disable_web_page_preview': False  # 프리뷰 ON
     }
-
     try:
         requests.post(url, data=data)
         print(f"📤 텔레그램 전송 완료: {title}")
