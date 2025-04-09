@@ -93,8 +93,9 @@ def get_live_news():
     return news_list
 
 def send_telegram(title, link, press):
-    message = f"""📰 <b>[{press}]</b> {title}
-
+    short_title = shorten_title(title)
+    message = f"""📰 <b>[{press}]</b>
+{short_title}
 {link}
 """
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
