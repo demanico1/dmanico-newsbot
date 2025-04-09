@@ -93,16 +93,24 @@ def get_live_news():
     return news_list
 
 def send_telegram(title, link, press):
-    message = f"""📰 <b>{title}</b>\n\n<b>매체:</b> {press}\n\n📰 <b>[뉴스 제목]</b>\n{title}\n\n🔗 {link}"""
-    url_api = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    message = f"""🔥 <b>뉴스</b> 🔥
+
+📰 <b>{title}</b>
+<b>매체:</b> {press}
+
+🔗 <a href="{link}">{link}</a>
+"""
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         'chat_id': CHAT_ID,
         'text': message,
         'parse_mode': 'HTML',
-        'disable_web_page_preview': False
+        'disable_web_page_preview': False  # 프리뷰 ON
     }
+
     try:
-        requests.post(url_api, data=data)
+        requests.post(url, data=data)
         print(f"📤 텔레그램 전송 완료: {title}")
     except Exception as e:
         print(f"❌ 텔레그램 전송 실패:")
