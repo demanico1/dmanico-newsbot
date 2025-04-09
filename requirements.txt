@@ -3,4 +3,4 @@ beautifulsoup4
 gspread
 oauth2client
 flask
-openai
+openai==0.28
