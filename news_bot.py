@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
 import time
@@ -6,6 +7,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import os
+from flask import Flask
+import threading
 
 # ▶️ 디마니코 정보
 BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
@@ -55,21 +58,38 @@ def log_to_sheet(title, link, timestamp):
 # ✅ 텔레그램 전송 (텍스트 + 썸네일)
 def send_telegram(title, link, img_url=None):
     message = f"""📢 <b>디마니코 뉴스</b>\n\n{title}\n{link}"""
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto" if img_url else f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {
-        'chat_id': CHAT_ID,
-        'caption': message if img_url else None,
-        'photo': img_url if img_url else None,
-        'text': None if img_url else message,
-        'parse_mode': 'HTML',
-        'disable_web_page_preview': False
-    }
-    response = requests.post(url, data={k: v for k, v in data.items() if v is not None})
+    if img_url:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        data = {
+            'chat_id': CHAT_ID,
+            'photo': img_url,
+            'caption': message,
+            'parse_mode': 'HTML'
+        }
+    else:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        data = {
+            'chat_id': CHAT_ID,
+            'text': message,
+            'parse_mode': 'HTML',
+            'disable_web_page_preview': False
+        }
+    response = requests.post(url, data=data)
     print(f"[텔레그램 응답] {response.text}")
 
-# ✅ 실행 루프
+# ✅ Flask 웹서버 실행 (Render keep-alive)
+app = Flask(__name__)
+@app.route('/')
+def home():
+    return "디마니코 뉴스봇 작동 중!"
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
+threading.Thread(target=run_flask).start()
+
+# ✅ 실시간 뉴스 감지 루프
 old_links = []
 while True:
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 루프 작동 중...")
     news_items = get_stockinfo7_news()
     for title, link, timestamp, img_url in news_items:
         if link not in old_links:
