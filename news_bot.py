@@ -104,10 +104,8 @@ def get_live_news():
 # ✅ 텔레그램 전송 (제목+프리뷰 안정화)
 def send_telegram(title, link, press):
     short_title = shorten_title(title)
-    message = f"""📰 <b>[{press}]</b> {short_title}
+    message = f"""📰 <b>{short_title}</b>  <i>[{press}]</i>\n{link}"""
 
-{link}
-"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         'chat_id': CHAT_ID,
