@@ -74,15 +74,21 @@ def log_to_sheet(sheet, title, link, press):
 def extract_preview_title(url):
     try:
         print(f"🔍 프리뷰 제목 추출 시도: {url}")
-        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        
+        # 모바일 -> 데스크탑 링크로 전환
+        url = url.replace('/mnews/', '/')
+
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
         soup = BeautifulSoup(res.text, 'html.parser')
         og_title = soup.find('meta', property='og:title')
+
         if og_title and og_title.get('content'):
             preview_title = og_title['content'].strip()
             print(f"✅ 프리뷰 제목 추출 성공: {preview_title}")
             return preview_title
         else:
             print("⚠️ og:title 메타태그 없음")
+
     except Exception as e:
         print(f"❌ 프리뷰 제목 추출 실패: {e}")
     return None
