@@ -11,32 +11,32 @@ from oauth2client.service_account import ServiceAccountCredentials
 import traceback
 import builtins
 
-# ✅ 실시간 로그 출력 (Render 로그에 즉시 보이도록)
+# 실시간 로그 출력
 real_print = builtins.print
 builtins.print = lambda *args, **kwargs: real_print(*args, **{**kwargs, "flush": True})
 
-# ✅ 설정
+# 설정
 BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
 CHAT_ID = '2037756724'
 SHEET_NAME = '디마니코 뉴스 트래커'
 MAX_SEND_PER_LOOP = 3
 LINK_CACHE_FILE = 'old_links.json'
 
-# ✅ KST 시간 함수
+# KST 시간
 def now_kst():
     return datetime.utcnow() + timedelta(hours=9)
 
-# ✅ 뉴스 제목 너무 길면 자르기
+# 제목 자르기
 def shorten_title(title, max_len=100):
     return title if len(title) <= max_len else title[:max_len] + "..."
 
-# ✅ Flask 서버
+# Flask 서버
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "🟢 디마니코 뉴스봇 (KST, 프리뷰 안정화, 제목 보장)"
+    return "🟢 디마니코 뉴스봇 작동 중"
 
-# ✅ 구글 시트 연결
+# 구글 시트 연결
 def connect_google_sheet(sheet_name):
     key_json = os.environ.get('GOOGLE_KEY_JSON')
     if not key_json:
@@ -50,6 +50,7 @@ def connect_google_sheet(sheet_name):
 
 sheet = connect_google_sheet(SHEET_NAME)
 
+# 시트 기록
 def get_daily_worksheet(sheet):
     today = now_kst().strftime('%Y-%m-%d')
     try:
@@ -69,18 +70,24 @@ def log_to_sheet(sheet, title, link, press):
         print(f"❌ 시트 기록 실패:")
         traceback.print_exc()
 
-def load_old_links():
+# 프리뷰 제목 추출
+def extract_preview_title(url):
     try:
-        with open(LINK_CACHE_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return []
+        print(f"🔍 프리뷰 제목 추출 시도: {url}")
+        res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        og_title = soup.find('meta', property='og:title')
+        if og_title and og_title.get('content'):
+            preview_title = og_title['content'].strip()
+            print(f"✅ 프리뷰 제목 추출 성공: {preview_title}")
+            return preview_title
+        else:
+            print("⚠️ og:title 메타태그 없음")
+    except Exception as e:
+        print(f"❌ 프리뷰 제목 추출 실패: {e}")
+    return None
 
-def save_old_links(links):
-    with open(LINK_CACHE_FILE, 'w') as f:
-        json.dump(links[-100:], f)
-
-# ✅ 뉴스 수집 (속보 페이지 기준)
+# 뉴스 수집
 def get_live_news():
     url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001"
     try:
@@ -101,12 +108,11 @@ def get_live_news():
             news_list.append((title, link, press_name))
     return news_list
 
-# ✅ 텔레그램 전송 (제목+프리뷰 안정화)
+# 텔레그램 전송
 def send_telegram(title, link, press):
     preview_title = extract_preview_title(link)
     final_title = shorten_title(preview_title) if preview_title else shorten_title(title)
 
-    # 링크 먼저 배치 → 프리뷰 유지
     message = f"""{link}
 
 📰 <b>{final_title}</b>  <i>[{press}]</i>"""
@@ -116,7 +122,7 @@ def send_telegram(title, link, press):
         'chat_id': CHAT_ID,
         'text': message,
         'parse_mode': 'HTML',
-        'disable_web_page_preview': False  # 프리뷰 ON
+        'disable_web_page_preview': False
     }
     try:
         requests.post(url, data=data)
@@ -125,7 +131,7 @@ def send_telegram(title, link, press):
         print(f"❌ 텔레그램 전송 실패:")
         traceback.print_exc()
 
-# ✅ 뉴스 루프
+# 뉴스 루프
 def news_loop():
     old_links = load_old_links()
     while True:
@@ -145,10 +151,21 @@ def news_loop():
         save_old_links(old_links)
         time.sleep(60)
 
-# ✅ 루프 실행
+# 링크 캐시
+def load_old_links():
+    try:
+        with open(LINK_CACHE_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_old_links(links):
+    with open(LINK_CACHE_FILE, 'w') as f:
+        json.dump(links[-100:], f)
+
+# 실행
 threading.Thread(target=news_loop, daemon=True).start()
 
-# ✅ Flask 실행
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
