@@ -2,7 +2,3 @@ requests
 beautifulsoup4
 gspread
 oauth2client
-flask
-pandas
-lxml
-html5lib
