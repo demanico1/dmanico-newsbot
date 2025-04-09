@@ -93,7 +93,7 @@ def get_live_news():
     return news_list
 
 def send_telegram(title, link, press):
-    message = f"""📰 <b>{title}</b>\n\n<b>매체:</b> {press}\n\n{title}\n{link}"""
+    message = f"""📰 <b>{title}</b>\n\n<b>매체:</b> {press}\n\n📰 <b>[뉴스 제목]</b>\n{title}\n\n🔗 {link}"""
     url_api = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         'chat_id': CHAT_ID,
