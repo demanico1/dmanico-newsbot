@@ -104,14 +104,18 @@ def get_live_news():
 # ✅ 텔레그램 전송 (제목+프리뷰 안정화)
 def send_telegram(title, link, press):
     short_title = shorten_title(title)
-    message = f"""📰 <b>{short_title}</b>  <i>[{press}]</i>\n{link}"""
+
+    # 링크 먼저, 텍스트는 아래 (순서 바꿔서 텍스트가 강조되게 함)
+    message = f"""{link}
+
+📰 <b>{short_title}</b>  <i>[{press}]</i>"""
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         'chat_id': CHAT_ID,
         'text': message,
         'parse_mode': 'HTML',
-        'disable_web_page_preview': False  # 프리뷰 ON
+        'disable_web_page_preview': False  # 프리뷰 유지
     }
     try:
         requests.post(url, data=data)
