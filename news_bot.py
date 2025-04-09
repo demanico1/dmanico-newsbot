@@ -12,10 +12,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 import traceback
 import builtins
 
-# 🧠 모든 print 즉시 flush되도록
-builtins.print = lambda *args, **kwargs: __builtins__.print(*args, **{**kwargs, "flush": True})
+# ✅ print 재귀 오류 방지 (원본 백업)
+real_print = builtins.print
+builtins.print = lambda *args, **kwargs: real_print(*args, **{**kwargs, "flush": True})
 
-# 🧩 설정
+# 🧠 설정
 BOT_TOKEN = '8059473480:AAHWayTZDViTfTk-VtCAmPxvYAmTrjhtMMs'
 CHAT_ID = '2037756724'
 SHEET_NAME = '디마니코 뉴스 트래커'
@@ -27,7 +28,7 @@ openai.api_key = os.environ.get("OPENAI_API_KEY")
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "🟢 디마니코 뉴스봇 로그 디버그 버전 작동 중!"
+    return "🟢 디마니코 뉴스봇 작동 중!"
 
 # ✅ 구글 시트 연결
 def connect_google_sheet(sheet_name):
@@ -74,7 +75,7 @@ def save_old_links(links):
         json.dump(links[-100:], f)
 
 def get_live_news():
-    url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001"  # 속보 섹션
+    url = "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=001"
     res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
     soup = BeautifulSoup(res.text, 'html.parser')
 
@@ -104,13 +105,13 @@ def fetch_article_content(url):
 
 def summarize_news(title, content):
     try:
-        print(f"🧠 GPT 요약 요청... 제목: {title}")
+        print(f"🧠 GPT 요약 요청: {title}")
         prompt = f"다음 뉴스 내용을 한 문장으로 요약해줘:\n\n제목: {title}\n\n내용: {content}"
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
-        print("✅ GPT 요약 응답 수신 완료")
+        print("✅ GPT 응답 도착")
         return response.choices[0].message.content.strip()
     except Exception as e:
         print("❌ 요약 실패:")
@@ -119,13 +120,13 @@ def summarize_news(title, content):
 
 def analyze_sentiment(title, content):
     try:
-        print(f"📊 감성 분석 요청... 제목: {title}")
+        print(f"📊 감성 분석 요청: {title}")
         prompt = f"다음 뉴스가 투자자 관점에서 긍정적인지, 부정적인지, 중립적인지 판단해줘:\n\n제목: {title}\n\n내용: {content}"
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
-        print("✅ 감성 분석 결과 수신 완료")
+        print("✅ 감성 분석 결과 수신")
         return response.choices[0].message.content.strip()
     except Exception as e:
         print("❌ 감성 분석 실패:")
@@ -152,7 +153,7 @@ def news_loop():
     old_links = load_old_links()
     while True:
         now = datetime.now().strftime('%H:%M:%S')
-        print(f"\n🔁 [{now}] 뉴스 루프 작동 중...")
+        print(f"\n🔁 [{now}] 뉴스 루프 시작")
         news_items = get_live_news()
         count = 0
         for title, link, press in news_items:
@@ -170,7 +171,7 @@ def news_loop():
         save_old_links(old_links)
         time.sleep(60)
 
-# ✅ 루프 실행
+# ✅ 루프 백그라운드 실행
 threading.Thread(target=news_loop, daemon=True).start()
 
 # ✅ Flask 서버 실행
